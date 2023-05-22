@@ -7,8 +7,62 @@ import networkx as nx
 import math
 import os
 import areaDef as ar
+import energyModels as EM
+import sympy as sp
+
+# fetches expanded bounding box coordinates
+bN,bE,bS,bW = ar.bBoxes[1]
+# fetches warehouse name
+warehouse = ar.warehouse
+# fetches start/end point coordinates
+N,E,S,W = ar.bBoxes[0]
+start = ar.start
+
+# ESTIMATION OF RATIO OF FLIGHT VS BUS ENERGY CONSUMPTION
+# mass = sp.symbols('mass')
+# bus energy consumption increase (Wh/km) per g added mass based on bus mass of 20.4 tonnes,
+# consumption 1110Wh/km and linear relationship between mass and energy consumption
+# busECkm = mass*1110/2240000
+# flECkm = (4*((mass/4)*EM.thrustM + EM.thrustC))/(EM.cruiseSpeed/3.6)
+# ECratio = (busECkm/flECkm)
+# print(ECratio.subs(mass,2500))
+# print(ECratio.subs(mass,3000))
+# print(ECratio.subs(mass,3500))
+
+# resulting average (variation +-10%)
+# riKwhM = 0.02
+# to decrease ride time
+
+riKwhM = 0.02
+
+# imports open street map graph of area
+area = ox.graph_from_bbox(bN,bS,bE,bW, network_type="drive", simplify=True)
+P = ox.project_graph(area, to_crs='WGS84')
+
+# identifies and removes duplicate edges between each pair of nodes
+parallelEdges = []
+for u,v in P.edges():
+    if len(P[u][v])>1:
+        if [u,v] not in parallelEdges:
+            parallelEdges.append([u,v])
+for u,v in parallelEdges:
+    P.remove_edge(u,v,1)
+
+# for every edge, adds travel method attribute with default as fly and energy consumption with placeholder value=length
+for u,v in P.edges():
+    length = P[u][v][0]['length']
+    nx.set_edge_attributes(P,{(u,v, 0):{'method': 'fly', 'energy':length, 'oneway': False}})
+
+# plots area map
+fig, ax = plt.subplots()
+ox.plot_graph(P, bgcolor='none', node_size=0, edge_color='black', edge_linewidth= 0.5, show=False, close=False, ax = ax)
+
+# saves graph with flight-only energy attributes
+ox.save_graphml(P, filepath="graphs\\" + warehouse + "flight.graphml")
 
 def wtBusEdges(route, P):
+    # adds travel method and energy consumption attributes to edges of graph P
+    # along the route based on energy consumption of hitch-hikinge
     for n in range(len(route)-1):
         u = route[n]
         v = route[n+1]
@@ -16,9 +70,9 @@ def wtBusEdges(route, P):
         nx.set_edge_attributes(P,{(u,v, 0):{'method': 'ride', 'energy':riKwhM*length}})
 
 def nrNodeNrEdge(P, pLat, pLon):
-
+    # efficiently estimates nearest node to each bus stop by  finding its nearest edge
+    # then calculating which edge end-node is closest (max distance node -> stop 170m)
     u, v, key = ox.nearest_edges(P, pLat, pLon)
-
     ux = P.nodes[u]['x']-pLon
     uy = P.nodes[u]['y']-pLat
     vx = P.nodes[v]['x']-pLon
@@ -31,32 +85,6 @@ def nrNodeNrEdge(P, pLat, pLon):
         nodeid = v
     return nodeid
 
-bN,bS,bE,bW = ar.bBox
-print(bN,bS,bE,bW)
-N,S,E,W = ar.N, ar.S, ar.E, ar.W
-start = ar.start
-flKwhM = 0.000024
-riKwhM = 0.00000719
-
-fig, ax = plt.subplots()
-area = ox.graph_from_bbox(bN,bS,bE,bW, network_type="drive", simplify=True)
-P = ox.project_graph(area, to_crs='WGS84')
-ox.plot_graph(P, bgcolor='none', node_size=0, edge_color='black', edge_linewidth= 0.5, show=False, close=False, ax = ax)
-
-parallelEdges = []
-
-for u,v in P.edges():
-    if len(P[u][v])>1:
-        if [u,v] not in parallelEdges:
-            parallelEdges.append([u,v])
-    length = P[u][v][0]['length']
-    nx.set_edge_attributes(P,{(u,v, 0):{'method': 'fly', 'energy':flKwhM*length, 'oneway': False}})
-
-for u,v in parallelEdges:
-    P.remove_edge(u,v,1)
-
-ox.save_graphml(P, filepath="flight.graphml")
-
 # creates list of busline stop file names
 fileDir = 'areaLineStops/'
 lineFiles = os.listdir(fileDir)
@@ -64,52 +92,53 @@ lineFiles = os.listdir(fileDir)
 # creates empty array to store all bus routes
 allBusRoutes =[]
 
-# iterates through busline stop files
+# iterates through bus-line file and generates map route based on bus-stop nearest nodes
 for fName in lineFiles:
     # loads bus stop id and coordinate data into np array
     data = pd.read_csv(fileDir+fName)
     bStops = np.column_stack((np.array(data['0']), np.array(data['2']),np.array(data['1'])))
 
-    # creates a list of nearest nodes to each bus stop
+    # create list of nearest node to each bus stop
     stopNodes = np.array([ox.nearest_nodes(P, s[2], s[1]) for s in bStops])
-    # stopNodes = np.array([nrNodeNrEdge(P, s[2], s[1]) for s in bStops])
     # removes duplicates (in case of close stops with same nearest node)
     stopNodes = list(dict.fromkeys(stopNodes))
     
-    # creates empty array to store this bus route
     busRoute = []
     # iterates through the bus stop nodes
     for i in range(len(stopNodes)-1):
-        # tries to find a route between the node and the next node, returns the route minus the next node
+        
         try:
+            # finds a path between consecutive nodes
             path = nx.shortest_path(P, stopNodes[i], stopNodes[i+1], weight='length')[:-1]
-        # executed if there is no route (bus route leaves and re-enters the graph)
+        
         except:
-            # adds the final stop node to the route section
+            # if there is no path (bus route leaves and re-enters the graph)
+            # ends route section and adds it to bus routes array
             busRoute.append(stopNodes[i])
-            # the current section of the route is added to the bus routes array
             allBusRoutes.append(busRoute)
             # creates new empty section
             busRoute = []
-        # if there is a route, it is added to the current section of the bus route
+
         else:
+            # if there is a path >1km also ends route section and adds it to bus routes array
             if nx.shortest_path_length(P, stopNodes[i], stopNodes[i+1], weight='length') > 1000:
                 busRoute.append(stopNodes[i])
                 allBusRoutes.append(busRoute)
                 busRoute = []
+            # if there is a path <1km adds it the current section of the bus route
             else:
                 busRoute = busRoute + path
     # adds the final stop node to the route section
     busRoute.append(stopNodes[-1])
     allBusRoutes.append(busRoute)
-    print(1)
 
-# plots all bus route sections
 for route in allBusRoutes:
+    # updates energy consumption in all bus route sections
     wtBusEdges(route, P)
     ox.plot_graph_route(P, route,bgcolor='none', node_size=0.5, edge_color='black', edge_linewidth= 0.5,
                         orig_dest_size=10, show=False, close=False, ax = ax, route_color='r', route_linewidth=1)
 
-ox.save_graphml(P, filepath="ride.graphml")
+# saves graph with flight and hitch-hike energy attributes
+ox.save_graphml(P, filepath="graphs\\" + warehouse +"ride.graphml")
 
 plt.show()

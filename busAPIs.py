@@ -1,3 +1,4 @@
+# Defines the account details and functions used to access TFL API data
 import requests
 import json
 

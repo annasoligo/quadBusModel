@@ -1,55 +1,67 @@
-import numpy as np
+# Defines geographic model features:
+# Defines a specified warehouse start point and generates a boounding box round it
+# Defines functions to convert between British National Grid Eastings/Northings
+# and latitude/longitude, to find the geodisic distances between lat/long points,
+
 from scipy.spatial import Voronoi
+from pyproj import Proj, transform
+from math import *
 
-# This file defines the longitude and latitude of the furthest start and end points
-# It generates bounding box coordinates for an area around this based on
-# a N/S and a E/W expansion
+# Specify warehouse
+warehouse = 'DXE1'
 
+# map expansion from start/end coordinates in m
+expNS = 500
+expEW = 500
 
-# closest Amazon warehouses to London
-# latitude, longitude
-coords = {'UUK2':[51.411353, -0.189772], 'DXE1': [51.520839, -0.008333], 'DHA1':[51.556695, -0.264460]}
-# eastings, northings
-amUUK2 = [525992, 169591]
-amDXE1 = [538278, 182093]
-amDHA1 = [520415, 185628]
-
-warehouse = 'UUK2'
-
+# closest warehouse locations to London (eastings, northings - British National Grid system)
+whCoords = {'UUK2': [525992, 169591], 'DXE1': [538278, 182093], 'DHA1': [520415, 185628]}
+print(whCoords['UUK2'])
 # furthest point from London's 3 central Amazon warehouses
-vor = Voronoi([amUUK2, amDXE1, amDHA1])
+centreEN = Voronoi([whCoords['UUK2'], whCoords['DXE1'], whCoords['DHA1']]).vertices[0]
 
-# print(vor.vertices)
-# centre in lat/long, converted online
+# defines furthest start and end delivery points                         
+start = whCoords[warehouse]
+end = centreEN
 
-vorCen = (51.499316,-0.150560)
+# coordinate system parameters
+v84 = Proj(proj="latlong",towgs84="0,0,0",ellps="WGS84")
+v36 = Proj(proj="latlong", k=0.9996012717, ellps="airy",
+        towgs84="446.448,-125.157,542.060,0.1502,0.2470,0.8421,-20.4894")
+vgrid = Proj(init="world:bng")
 
-# map N/S expansion from start and end coordinates in km
-expNS = 0.5
-# map E/W expansion from start and end coordinates in km
-expEW = 0.5
 
-# assigns start and furthest end points
-end = vorCen
-start = coords[warehouse]
+def EN2LL(EN):
+    # converts British National Grid coordinates to latitude and longitude
+    vlon36, vlat36 = vgrid(EN[0], 
+                           EN[1], 
+                           inverse=True)
+    converted = transform(v36, v84, vlon36, vlat36)
+    lon = converted[0]
+    lat = converted[1]
+    return lat, lon
 
-# finds bounding value in each direction
-N = max(start[0], end[0])
-E = max(start[1], end[1])
-S = min(start[0], end[0])
-W = min(start[1], end[1])
+def haversine(lon1, lat1, lon2, lat2):
+    # implements Haversine formula to find the geodisic distances between points 
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2]) 
+    dlon = lon2 - lon1 
+    dlat = lat2 - lat1 
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a)) 
+    r = 6371 # Radius of earth in kilometers. Use 3956 for miles. Determines return value units.
+    return c * r
 
-def expandMap(N, S, dNS, E, W, dEW):
-    #expands bounding box defined by coordinates above
-    #by the distances dNS and dEW km respectively
-    N = round(N+dNS/110.574,6)
-    S = round(S-dNS/110.574,6)
-    mNS = (N+S)/2
-    E = round(E+dEW/(110.574*np.cos(np.deg2rad(mNS))),6)
-    W = round(W-dEW/(110.574*np.cos(np.deg2rad(mNS))),6)
-    return[N,S,E,W]
+def getBounds(start, end, expNS, expEW):
+    # returns unexpanded and expanded NESW bounds, based on start and end points
+    NE = EN2LL([max(start[0], end[0]),max(start[1],end[1])])
+    SW = EN2LL([min(start[0], end[0]),min(start[1],end[1])])
+    bounds = NE+SW
+    exNE = EN2LL([max(start[0], end[0])+expNS,max(start[1],end[1])+expEW])
+    exSW = EN2LL([min(start[0], end[0])-expNS,min(start[1],end[1])-expEW])
+    expanded = exNE+exSW
+    return[bounds, expanded]
 
-# returns bounding box values 
-bBox= expandMap(N, S, expNS, E, W, expEW)
+# bounding box values 
+bBoxes = getBounds(start, end, expNS, expEW)
+startLL = EN2LL(start)
 
-# display graph of area

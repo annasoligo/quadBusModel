@@ -1,38 +1,36 @@
-# Identifies bus lines which pass through the area defined in vars.py
-# and saves the output to busLines.csv
-
+# Uses the TFL API to identify the day bus routes which pass through the area defined 
+# in areaDef and saves ordered lists of the stops on these lines into CSV files
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-import csv
 
 import areaDef as ar
-from EN2LonLat import EN2LL
+from areaDef import EN2LL
 import busAPIs as tfl
 
 # loads map bound coordinates
-bN,bS,bE,bW = ar.bBox
-print(bN,bS,bE,bW)
+bN,bE,bS,bW = ar.bBoxes[1]
+# gets warehouse name
+warehouse = ar.warehouse
 # loads all London bus stops data
-allStops = pd.read_csv('busStops.csv')
+allStops = pd.read_csv('busData\\busStops.csv')
 
 # converts stop Easting and Northing to Longitude and Latitude
-lats, lons = EN2LL(allStops['Location_Easting'], allStops['Location_Northing'])
+lats, lons = EN2LL([allStops['Location_Easting'], allStops['Location_Northing']])
 # creates array of stop Ids and Coordinates
 allStopsLL= np.column_stack((allStops['Naptan_Atco'], lats, lons))
 
-# creates array for stops on map
+# creates array for bus stops in map bounds
 areaStops =[1,1,1]
-
-# adds stops which are within the map bounds and whose ID contain the bus stop code  
+# adds stations which are within the map bounds and whose ID contain the bus stop code  
 for stop in allStopsLL:
-    if stop[1]>bW and stop[1]<bE:
-       if stop[2]>bS and stop[2]<bN:
+    if stop[2]>bW and stop[2]<bE:
+       if stop[1]>bS and stop[1]<bN:
            naptan = str(stop[0])
            if '900' in naptan:
             areaStops = np.row_stack((areaStops, stop))
-# deletes placeholder
+# deletes [1,1,1] placeholder
 areaStops = np.delete(areaStops,0,0)
 
 # creates array for bus lines passing through area
@@ -56,10 +54,11 @@ for stop in areaStops:
 print('Number of bus lines = ', len(busLines))
 
 
-# iterates through bus lines and returns an ordered list of all stops on that line
+# iterates through the area bus lines and returns an ordered list of all stops on that line
 # checks which bus stops are within the bounding box and removes the others
-# saves the stop Ids and coordinates to a CSV file named according to the line 
-dirName = 'areaLineStops/'
+# saves stop IDs and coordinates within a directory for the warehouse
+
+dirName =  'busData\\'+warehouse+'LineStops/'
 completed = 0
 for l in busLines:
     try:
