@@ -8,7 +8,7 @@ from pyproj import Proj, transform
 from math import *
 
 # Specify warehouse
-warehouse = 'DXE1'
+warehouse = 'DHA1'
 
 # map expansion from start/end coordinates in m
 expNS = 500

@@ -86,7 +86,7 @@ def nrNodeNrEdge(P, pLat, pLon):
     return nodeid
 
 # creates list of busline stop file names
-fileDir = 'areaLineStops/'
+fileDir = 'busData\\' + warehouse +'LineStops\\'
 lineFiles = os.listdir(fileDir)
 
 # creates empty array to store all bus routes
@@ -110,7 +110,6 @@ for fName in lineFiles:
         try:
             # finds a path between consecutive nodes
             path = nx.shortest_path(P, stopNodes[i], stopNodes[i+1], weight='length')[:-1]
-        
         except:
             # if there is no path (bus route leaves and re-enters the graph)
             # ends route section and adds it to bus routes array
@@ -118,7 +117,6 @@ for fName in lineFiles:
             allBusRoutes.append(busRoute)
             # creates new empty section
             busRoute = []
-
         else:
             # if there is a path >1km also ends route section and adds it to bus routes array
             if nx.shortest_path_length(P, stopNodes[i], stopNodes[i+1], weight='length') > 1000:
@@ -135,7 +133,7 @@ for fName in lineFiles:
 for route in allBusRoutes:
     # updates energy consumption in all bus route sections
     wtBusEdges(route, P)
-    ox.plot_graph_route(P, route,bgcolor='none', node_size=0.5, edge_color='black', edge_linewidth= 0.5,
+    ox.plot_graph_route(P, route,bgcolor='none', node_size=0, edge_color='black', edge_linewidth= 0.5,
                         orig_dest_size=10, show=False, close=False, ax = ax, route_color='r', route_linewidth=1)
 
 # saves graph with flight and hitch-hike energy attributes
