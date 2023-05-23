@@ -7,7 +7,7 @@ from scipy.spatial import Voronoi
 from pyproj import Proj, transform
 from math import *
 
-# Specify warehouse
+# Specify warehouse (UUK2 = S, DXE1 = NE, DHA1 = NW)
 warehouse = 'DHA1'
 
 # map expansion from start/end coordinates in m

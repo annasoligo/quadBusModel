@@ -18,22 +18,6 @@ warehouse = ar.warehouse
 N,E,S,W = ar.bBoxes[0]
 start = ar.start
 
-# ESTIMATION OF RATIO OF FLIGHT VS BUS ENERGY CONSUMPTION
-# mass = sp.symbols('mass')
-# bus energy consumption increase (Wh/km) per g added mass based on bus mass of 20.4 tonnes,
-# consumption 1110Wh/km and linear relationship between mass and energy consumption
-# busECkm = mass*1110/2240000
-# flECkm = (4*((mass/4)*EM.thrustM + EM.thrustC))/(EM.cruiseSpeed/3.6)
-# ECratio = (busECkm/flECkm)
-# print(ECratio.subs(mass,2500))
-# print(ECratio.subs(mass,3000))
-# print(ECratio.subs(mass,3500))
-
-# resulting average (variation +-10%)
-# riKwhM = 0.02
-# to decrease ride time
-
-riKwhM = 0.02
 
 # imports open street map graph of area
 area = ox.graph_from_bbox(bN,bS,bE,bW, network_type="drive", simplify=True)
@@ -51,7 +35,7 @@ for u,v in parallelEdges:
 # for every edge, adds travel method attribute with default as fly and energy consumption with placeholder value=length
 for u,v in P.edges():
     length = P[u][v][0]['length']
-    nx.set_edge_attributes(P,{(u,v, 0):{'method': 'fly', 'energy':length, 'oneway': False}})
+    nx.set_edge_attributes(P,{(u,v, 0):{'method': 'fly', 'energy':length, 'cost':length, 'oneway': False}})
 
 # plots area map
 fig, ax = plt.subplots()
@@ -67,7 +51,7 @@ def wtBusEdges(route, P):
         u = route[n]
         v = route[n+1]
         length = P[u][v][0]['length']
-        nx.set_edge_attributes(P,{(u,v, 0):{'method': 'ride', 'energy':riKwhM*length}})
+        nx.set_edge_attributes(P,{(u,v, 0):{'method': 'ride'}})
 
 def nrNodeNrEdge(P, pLat, pLon):
     # efficiently estimates nearest node to each bus stop by  finding its nearest edge
@@ -134,7 +118,7 @@ for route in allBusRoutes:
     # updates energy consumption in all bus route sections
     wtBusEdges(route, P)
     ox.plot_graph_route(P, route,bgcolor='none', node_size=0, edge_color='black', edge_linewidth= 0.5,
-                        orig_dest_size=10, show=False, close=False, ax = ax, route_color='r', route_linewidth=1)
+                        orig_dest_size=10, show=False, close=False, ax = ax, route_color='r', route_node_size=0, route_linewidth=1)
 
 # saves graph with flight and hitch-hike energy attributes
 ox.save_graphml(P, filepath="graphs\\" + warehouse +"ride.graphml")

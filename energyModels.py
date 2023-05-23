@@ -10,6 +10,7 @@ import math
 import networkx as nx
 import osmnx as ox
 from areaDef import haversine
+import routeFuncs as rF
 
 # Fixed parameters
 # all masses in g
@@ -41,7 +42,6 @@ penalty = 1100
 cruiseSpeed = 12            # drone cruise speed m/s - used to calculate flight time             
 busSpeed = 15               # km/hr, from https://www.london.gov.uk/who-we-are/what-london-assembly-does/questions-mayor/find-an-answer/average-bus-speeds 
 
-
 def findPathLengths(graph, start, end):
     # Finds the lowest energy route between the start and end points by 
     # comparing the energy consumption with and without the ride option
@@ -49,7 +49,7 @@ def findPathLengths(graph, start, end):
     # finds nearest graph nodes to start and end points
     start = ox.nearest_nodes(graph, start[1], start[0])
     end = ox.nearest_nodes(graph, end[1], end[0])
-    path = nx.shortest_path(graph, start, end, weight='energy')  
+    path = nx.shortest_path(graph, start, end, weight='cost')  
     pathFLen = nx.shortest_path_length(graph, start, end, weight='length')
 
     # iterates through ride path to find path length of the 3 parts:
@@ -138,8 +138,7 @@ def battDistOptP(graph, start, end, payloadMass, charge=False):
         chTime = (lenR/1000)/busSpeed                         # one way time on bus in hr
         chRates = {'low': actChargeRate, 'high': thChargeRate}  # charge powers in W
         chRate = chRates[charge]                                
-        oWMaxCh = chRate*chTime         # max one-way battery charge 
-
+        oWMaxCh = chRate*chTime         # max one-way battery charge .
         # defines charge received as the minimum of the max one-way battery charge and 
         # the remaining battery consumption based on energy used in flight since last charge
         # as functions of battery mass

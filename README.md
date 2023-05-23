@@ -45,5 +45,8 @@ A more detailed description of the function of each file is defined in the table
 * 21/12
     * Initial Commit, README added
 * 16/01
-   * Detail added to README
-
+    * Detail added to README
+* 22/05
+    * Added V2 analysis and energy modelling
+    * Restructure for ease of changing warehouses and data access
+    * Updated README for new analysis

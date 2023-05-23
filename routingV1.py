@@ -6,154 +6,168 @@ from areaDef import haversine
 import numpy as np
 from math import *
 import areaDef as ar
+from matplotlib import rc
+from sklearn.linear_model import LinearRegression
+
+
+import routeFuncs as rF
 
 
 # defines system parameters
-busTolEn = 0.0264           # energy penalty for added bus landing + takeoff
+busWhkm = 0.72              # bus ride Wh/km
+flWhkm = 24                 # flight Wh/km
+disPen = 1.1 
+busTolEn = disPen*flWhkm    # energy penalty for added bus landing + takeoff
 bN,bE,bS,bW = ar.bBoxes[1]  # bounding box for routes
 N,E,S,W = ar.bBoxes[0]      # bounding box for delivery locations
-start = ar.startLL           # start location (specified warehouse)
+start = ar.startLL          # start location (specified warehouse)
 nSGraphs = 10               # number of route comparison graphs to show
-nSEff = 200                 # number of routes to compare energy consumption
-nSLens = 200                # number of routes to compare flight/ride distances
+nSEff = 300                 # number of routes to compare energy consumption
+nSLens = 300                # number of routes to compare flight/ride distances
 warehouse = ar.warehouse    # warehouse name
-gc1 = 'red'                 # graph colour 1
-gc2 = 'darkOrange'          # graph colour2
+sBus = 15                   # bus speed in km/hr       
+sFly = 36                   # drone speed in km/hr
 
+cost = rF.costV1
 
-def loadGraph(fName):
-    # loads graph and processes energy metrics
-    P = ox.load_graphml(fName + '.graphml')
-    for u,v in P.edges():
-        P[u][v][0]['energy'] = float(P[u][v][0]['energy'])
-    return P
+#graph colours
+gR = '#E22526'
+gDO = '#D36027'
+gO = '#E6A024'
+gY = '#EFE442'
+gP = '#CC79A7'
+gB = '#0273B3'
+gLB = '#5BB4E5'
+gG = '#009E73'
+gColors = {'UUK2':[gR,gO], 'DHA1':[gB,gLB], 'DXE1':[gG,gY]}
+gc1 = gColors[warehouse][0]            # graph colour dark
+gc2 = gColors[warehouse][1]            # graph colour light
+# changes font for all plots
+rc('font',**{'family':'sans-serif','sans-serif':['Arial']})  
 
-def genRanCoords(maxN, maxS, maxE, maxW, nCoords):
-    # generates a n pairs of random coordinate within the defined area
-    # returns n*2 array
-    rangeLat  = maxN-maxS
-    rangeLon = maxE-maxW
-    randLats = (np.random.rand(nCoords,1)*rangeLat)+maxS
-    randLons = (np.random.rand(nCoords,1)*rangeLon)+maxW
-    randCoords = np.column_stack((randLats, randLons))
-    return randCoords
-
-def minEnergyRoute(graph, start, end):
-    # uses Dijkstras based on the energy attribute of edges to return the
-    # lowest energy route from start to end, its estimated energy consumption,
-    # and the distances flown and hitch-hiked
-    path = nx.shortest_path(graph, start, end, weight='energy')
-    energy = nx.shortest_path_length(graph, start, end, weight='energy')
-    lenRide, lenFly = 0, 0
-    for i in range(len(path)-1):
-        u, v = path[i], path[i+1]
-        if graph[u][v][0]['method'] == 'ride':
-            lenRide += graph[u][v][0]['length']/1000
-        else:
-            lenFly += graph[u][v][0]['length']/1000
-    routeData = (path, energy, lenRide, lenFly)
-    return routeData
 
 def graphTitle(method, energy, length):
-    title = method + ": " + str(round(energy,3)) + "kwh\n" + str(round(length,3)) +"km\n"
+    title = method + ": " + str(round(energy,1)) + "Wh\n" + str(round(length,2)) +"km\n"
     return title
 
-#ec = ['r' if d['method']=='ride'  else 'black' for u,v,k,d in flightP.edges(keys=True, data=True)]
-#ox.plot_graph(flightP, bgcolor='none', node_size=0, edge_color=ec, edge_linewidth= 0.5, show=False, close=False, ax = ax1)
-
-def compareRoutes(graph1, name1, graph2, name2, nSamples, destBounds, startCoord, penalty2):
+def compareRoutes(graph1, name1, graph2, name2, nSamples, destBounds):
     # plots maps of the lowest energy drone routes with and without hitchhiking 
     # for n random destination coordinatess
-    startNode = ox.nearest_nodes(graph1, startCoord[1], startCoord[0])
     N,S,E,W = destBounds
-    randCoords = genRanCoords(N,S,E,W,nSamples)
+    randCoords = rF.genRanCoords(N,S,E,W,nSamples)
     fig, ax = plt.subplots(1,nSamples)
     for i in range(nSamples):
-        lat, lon = randCoords[i]
-        dest = ox.nearest_nodes(graph1, lon, lat)
-        path1, energy1, lenR1, lenF1 = minEnergyRoute(graph1, startNode, dest)
-        path2, energy2, lenR2, lenF2 = minEnergyRoute(graph2, startNode, dest)
-        energy2+=2*penalty2
-        energy1+=penalty2
-        axi = ax[i]
-        ox.plot_graph(graph1, bgcolor='none', node_size=0, edge_color='black', edge_linewidth= 0.3, show=False, close=False, ax = axi)
-        ox.plot_graph_route(graph1, path1, orig_dest_size=10, show=False, close=False, ax = axi, route_color=gc1, route_linewidth=2)
-        ox.plot_graph_route(graph2, path2, orig_dest_size=10, show=False, close=False, ax = axi, route_color=gc2, route_linewidth=2)
-        axi.set_title((graphTitle(name1, energy1, lenR1+lenF1)+ graphTitle(name2, energy2, lenR2+lenF2)), fontsize=8)
+        print(i)
+        try:
+            lat, lon = randCoords[i]
+            dest = ox.nearest_nodes(graph1, lon, lat)
+            path1, energy1, lenR1, lenF1, _ = rF.weightedMER(graph1, dest, cost, busWhkm, flWhkm, sBus, sFly)
+            path2, energy2, lenR2, lenF2, _ = rF.weightedMER(graph2, dest, cost, busWhkm, flWhkm, sBus, sFly)
+            axi = ax[i]
+            ox.plot_graph(graph1, bgcolor='none', node_size=0, edge_color='black', edge_linewidth= 0.2, show=False, close=False, ax = axi)
+            ox.plot_graph_route(graph1, path1, orig_dest_size=10, show=False, close=False, ax = axi, route_color=gc1, route_linewidth=2)
+            ox.plot_graph_route(graph2, path2, orig_dest_size=10, show=False, close=False, ax = axi, route_color=gc2, route_linewidth=2)
+            axi.set_title((graphTitle(name1, energy1, lenR1+lenF1)+ graphTitle(name2, energy2, lenR2+lenF2)), fontsize=8)
+        except:
+            print('No route found')
     plt.show()
 
-def compareEff(graph1, name1, graph2, name2, nSamples, destBounds, startCoord, penalty2):
+def compareEff(graph1, name1, graph2, name2, nSamples, destBounds):
     # finds the lowest energy drone routes with and without hitchhiking for n random
     # destinations, and plots the energy difference against geodisic delivery distance
-    startLat,startLon = startCoord
-    startNode = ox.nearest_nodes(graph1, startLon, startLat)
+    startLat,startLon = start
     N,S,E,W = destBounds
-    randCoords = genRanCoords(N,S,E,W,nSamples)
+    randCoords = rF.genRanCoords(N,S,E,W,nSamples)
     data = []
     for i in range(nSamples):
-        lat, lon = randCoords[i]
-        dest = ox.nearest_nodes(graph1, lon, lat)
-        distance = haversine(startLon,startLat,graph1.nodes[dest]['lon'],graph1.nodes[dest]['lat'])
-        _, energy1, _, _ = minEnergyRoute(graph1, startNode, dest)
-        _, energy2, _, _ = minEnergyRoute(graph2, startNode, dest)       
-        energy2 += penalty2
-        data.append([distance, energy1, energy2])
+        print(i)
+        try:
+            lat, lon = randCoords[i]
+            dest = ox.nearest_nodes(graph1, lon, lat)
+            distance = haversine(startLon,startLat,graph1.nodes[dest]['lon'],graph1.nodes[dest]['lat'])
+            _, energy1, _, _, _ = rF.weightedMER(graph1, dest, cost, busWhkm, flWhkm, sBus, sFly)
+            _, energy2, _, _, _ = rF.weightedMER(graph2, dest, cost, busWhkm, flWhkm, sBus, sFly)       
+            data.append([distance, energy1, energy2])
+        except:
+            print('No route found')
     data = np.array(data)
 
     fig, ax = plt.subplots()
     x=data[ :,0]
     y=(data[ :,1]-data[ :,2]).clip(min=0)
     print(y)
-    ax.scatter(x, y, s=2, c='black')
+    ax.scatter(x, y, s=4, c='black', alpha = 0.3)
+    x = x.reshape(-1, 1)
+    reg = LinearRegression().fit(x,y)
+    x2 = np.linspace(1.5,10.25,25).reshape(-1, 1)
+    ax.plot(x2, reg.predict(x2), c='black', alpha = 0.8)
     ax.grid(which='major', color='black', linestyle='-', alpha=0.2)
     ax.grid(which='minor', color='black', linestyle='-', alpha=0.1)
     ax.minorticks_on()
     ax.set_xlim(left=0)
     ax.set_xlabel('Geodesic Distance (km)')
-    ax.set_ylabel('Reduction in Energy-use (kWh)')
+    ax.set_ylabel('Reduction in Energy-use (Wh)')
     ax.set_title('Energy use of {} relative to {} only ({})\n '.format(name2, name1, warehouse))
     plt.show()
 
-def getLenData(graph1, graph2, nSamples, destBounds, startCoord, penalty2):
+def getLenData(graph1, graph2, nSamples, destBounds):
     # finds the lowest energy drone route of the hitchhiking and non-hitchhiking 
     # options and plots the distances ridden and flown against total geodisic distance
-    startLat, startLon = startCoord
-    startNode = ox.nearest_nodes(graph1, startLon, startLat)
+    startLat, startLon = start
     N,S,E,W = destBounds
-    randCoords = genRanCoords(N,S,E,W,nSamples)
+    randCoords = rF.genRanCoords(N,S,E,W,nSamples)
     data = []
+    busLen = 0
+    nBusLen = 0
+    sDist = 0
+    busFlDist = 0
+    busRCount = 0
+    above2km = 0
     for i in range(nSamples):
-        lat, lon = randCoords[i]
-        dest = ox.nearest_nodes(graph1, lon, lat)
-        distance = haversine(startLon,startLat,graph1.nodes[dest]['lon'],graph1.nodes[dest]['lat'])
-        _, energy1, lenR1, lenF1 = minEnergyRoute(graph1, startNode, dest)
-        _, energy2, lenR2, lenF2 = minEnergyRoute(graph2, startNode, dest) 
-        if energy1-energy2 > penalty2:
-            lenRide,lenFly = lenR2, lenF2
-        else:
-            lenRide, lenFly = lenR1, lenF1 
-        data.append([distance,lenRide,lenFly])
+        print(i)
+        try:
+            lat, lon = randCoords[i]
+            dest = ox.nearest_nodes(graph1, lon, lat)
+            distance = haversine(startLon,startLat,graph1.nodes[dest]['lon'],graph1.nodes[dest]['lat'])
+            _, energy1, lenR1, lenF1, _ = rF.weightedMER(graph1, dest, cost, busWhkm, flWhkm, sBus, sFly)
+            _, energy2, lenR2, lenF2, _ = rF.weightedMER(graph2, dest, cost, busWhkm, flWhkm, sBus, sFly)
+    
+            busLen+=lenR2+lenF2
+            nBusLen+=lenR1+lenF1
+            sDist+=distance
+            if energy1>energy2:
+                lenRide,lenFly = lenR2, lenF2
+                busRCount+=1
+                busFlDist +=lenF2
+                if lenFly>2:
+                    above2km+=1
+            else:
+                lenRide, lenFly = lenR1, lenF1 
+            data.append([distance,lenRide,lenFly])
+        except:
+            print('No route found')
+    print('Mean travel/geodisic distances: ', busLen/sDist, nBusLen/sDist)
+    print('Mean flight distance for HH routes: ',busFlDist/busRCount)
+    print('percent over 2km: ', above2km/nSamples )
     data = np.array(data)
 
     fig, ax = plt.subplots()
     x=data[ :,0]
     Ride=data[ :,1]
     Flight=data[ :,2]
-    ax.scatter(x, Ride, s=2, c=gc1)
-    ax.scatter(x, Flight, s=2, c=gc2)
+    ax.scatter(x, Ride, s=2, c=gc1, alpha = 0.8)
+    ax.scatter(x, Flight, s=2, c=gc2, alpha = 0.8)
     ax.grid(b=True, which='major', color='black', linestyle='-', alpha=0.2)
     ax.grid(b=True, which='minor', color='black', linestyle='-', alpha=0.1)
     ax.minorticks_on()
-    ax.set_xlim(left=0)
     ax.set_xlabel('Geodesic Distance (km)')
     ax.set_ylabel('Distance Travelled (km)')
-    ax.legend()
-    ax.set_title('Distance travelled bus-riding and flying relative to the geodisic distance from start to end points ({})\n'.format(warehouse))
+    ax.legend(['Bus-ride', 'Flight'])
     plt.show()
 
-flightP = loadGraph('flight')
-rideP = loadGraph('ride')
+flightP = rF.loadGraph('flight', busWhkm, flWhkm)
+rideP = rF.loadGraph('ride', busWhkm, flWhkm)
 
-compareRoutes(flightP, "F", rideP, "F&B", nSGraphs, [N,S,E,W], start, busTolEn)
-compareEff(flightP, "flight", rideP, "flight and bus-use", nSEff, [N,S,E,W], start, busTolEn)
-getLenData(flightP, rideP, nSLens, [N,S,E,W], start, busTolEn)
+#compareRoutes(flightP, "F", rideP, "F&B", 6, [N,S,E,W])
+#compareEff(flightP, "flight", rideP, "flight and bus-use", nSEff, [N,S,E,W])
+getLenData(flightP, rideP, nSLens, [N,S,E,W])
