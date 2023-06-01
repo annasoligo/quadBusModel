@@ -1,8 +1,10 @@
 # Defines functions to plot the impact of the time cost factor on the
 # optimum routes and their relative time and energy consumptions.
-# Defines the delected costs for access by routing files.
-# Defines functions to load graphs with cost factor applied.
+# Defines the selected costs for access by routing files.
+# Defines functions to load graphs with cost factor applied (for V2) and
+# to generate routes on an unweighted graph, accounting for a cost factor (for V1)
  
+
 import networkx as nx
 import osmnx as ox
 import matplotlib.pyplot as plt

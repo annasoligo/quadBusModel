@@ -150,7 +150,8 @@ def battDistOptP(graph, start, end, payloadMass, charge=False):
         # solves for minimum battery mass
         minBattMass = sp.solve(battMass - battCap/battED, battMass)[0]
         # rounds battery mass up to nearest available battery size
-        actBattMass = math.ceil(minBattMass/bMStep)*bMStep
+        #actBattMass = math.ceil(minBattMass/bMStep)*bMStep
+        actBattMass =minBattMass
         # substitutes battery mass to calculate charge power received 
         chAct1 = ch1.subs(battMass, actBattMass)
         chAct2 = ch2.subs(battMass, actBattMass)

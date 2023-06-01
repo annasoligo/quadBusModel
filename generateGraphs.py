@@ -4,11 +4,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import networkx as nx
-import math
 import os
 import areaDef as ar
-import energyModels as EM
-import sympy as sp
 
 # fetches expanded bounding box coordinates
 bN,bE,bS,bW = ar.bBoxes[1]

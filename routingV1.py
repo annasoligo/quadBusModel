@@ -16,7 +16,7 @@ import routeFuncs as rF
 # defines system parameters
 busWhkm = 0.72              # bus ride Wh/km
 flWhkm = 24                 # flight Wh/km
-disPen = 1.1 
+disPen = 1.1                # TOL penalty as an equivalent distance flown
 busTolEn = disPen*flWhkm    # energy penalty for added bus landing + takeoff
 bN,bE,bS,bW = ar.bBoxes[1]  # bounding box for routes
 N,E,S,W = ar.bBoxes[0]      # bounding box for delivery locations
@@ -28,8 +28,7 @@ warehouse = ar.warehouse    # warehouse name
 sBus = 15                   # bus speed in km/hr       
 sFly = 36                   # drone speed in km/hr
 
-cost = rF.costV1
-
+cost = 1 
 #graph colours
 gR = '#E22526'
 gDO = '#D36027'
@@ -94,13 +93,14 @@ def compareEff(graph1, name1, graph2, name2, nSamples, destBounds):
 
     fig, ax = plt.subplots()
     x=data[ :,0]
-    y=(data[ :,1]-data[ :,2]).clip(min=0)
-    print(y)
-    ax.scatter(x, y, s=4, c='black', alpha = 0.3)
+    en1 = data[ :,1]
+    en2 = data[ :,2]
+    red=(en1-en2).clip(min=0.01)
+    ax.scatter(x, red, s=3, c='black', alpha = 0.3)
     x = x.reshape(-1, 1)
-    reg = LinearRegression().fit(x,y)
+    reg = LinearRegression().fit(x,red)
     x2 = np.linspace(1.5,10.25,25).reshape(-1, 1)
-    ax.plot(x2, reg.predict(x2), c='black', alpha = 0.8)
+    ax.plot(x2, reg.predict(x2), c='black', alpha = 0.8, linewidth = 1.5)
     ax.grid(which='major', color='black', linestyle='-', alpha=0.2)
     ax.grid(which='minor', color='black', linestyle='-', alpha=0.1)
     ax.minorticks_on()
@@ -108,6 +108,25 @@ def compareEff(graph1, name1, graph2, name2, nSamples, destBounds):
     ax.set_xlabel('Geodesic Distance (km)')
     ax.set_ylabel('Reduction in Energy-use (Wh)')
     ax.set_title('Energy use of {} relative to {} only ({})\n '.format(name2, name1, warehouse))
+    plt.show()
+
+    fig, ax = plt.subplots()
+    ax.scatter(x, en1, s=3, c=gc1, alpha = 0.3)
+    ax.scatter(x, en2, s=3, c=gc2, alpha = 0.3)
+    ax.grid(which='major', color='black', linestyle='-', alpha=0.2)
+    ax.grid(which='minor', color='black', linestyle='-', alpha=0.1)
+    ax.minorticks_on()
+    ax.set_xlabel('Geodesic Distance (km)')
+    ax.set_ylabel('One-way Energy Consumption (Wh)')
+    meanFl = np.mean(en1)
+    meanRi = np.mean(en2)
+    meanV = 260/2
+    ax.hlines(meanFl, 0, 10.25, linewidth= 1.5, color = gc1)
+    ax.hlines(meanRi, 0, 10.25, linewidth= 1.5, color = gc2)
+    ax.hlines(meanV, 0, 10.25, linewidth= 1.5, color = 'black')
+    print('Mean flight: ', meanFl)
+    print('Mean HH: ', meanRi)
+    ax.legend(['Flight-only routes', 'Hitch-hiking routes', 'Flight-only mean', 'Hitch-hiking mean', 'Electric-van mean'])
     plt.show()
 
 def getLenData(graph1, graph2, nSamples, destBounds):
@@ -148,7 +167,8 @@ def getLenData(graph1, graph2, nSamples, destBounds):
             print('No route found')
     print('Mean travel/geodisic distances: ', busLen/sDist, nBusLen/sDist)
     print('Mean flight distance for HH routes: ',busFlDist/busRCount)
-    print('percent over 2km: ', above2km/nSamples )
+    print('Percent over 2km: ', above2km/nSamples )
+    print('Percent improved w/ HH: ', busRCount/nSamples)
     data = np.array(data)
 
     fig, ax = plt.subplots()

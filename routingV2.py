@@ -14,11 +14,14 @@ import pandas as pd
 import csv
 import random
 from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+poly2 = PolynomialFeatures(degree=2, include_bias=False)
 from matplotlib import rc
 import os
 from energyModels import battDistOptP
 import energyModels as EM
 import routeFuncs as rF
+import sympy as sp
 
 # fetches location variable values
 bN,bE,bS,bW = ar.bBoxes[1]  # bounding box for routes
@@ -39,16 +42,21 @@ gG = '#009E73'
 rc('font',**{'family':'sans-serif','sans-serif':['Arial']})
 cost = rF.costV2
 
+
 # ESTIMATION OF RATIO OF FLIGHT VS BUS ENERGY CONSUMPTION (V2)
 # mass = sp.symbols('mass')
 # bus energy consumption increase (Wh/km) per g added mass based on bus mass of 20.4 tonnes,
-# consumption 1110Wh/km and linear relationship between mass and energy consumption
-# busECkm = mass*1110/2240000
-# flECkm = (4*((mass/4)*EM.thrustM + EM.thrustC))/(EM.cruiseSpeed/3.6)
-# ECratio = (busECkm/flECkm)
-# print(ECratio.subs(mass,2500))
-# print(ECratio.subs(mass,3000))
-# print(ECratio.subs(mass,3500))
+#consumption 1110Wh/km and linear relationship between mass and energy consumption
+mass = sp.symbols('mass')
+busECkm = mass*1110/2240000
+flECkm = (4*((mass/4)**2*EM.thrustA + (mass/4)*EM.thrustB))/(EM.cruiseSpeed/3.6)
+ECratio = (busECkm/flECkm)
+print(ECratio.subs(mass,2000))
+print(ECratio.subs(mass,2500))
+print(ECratio.subs(mass,3000))
+print(ECratio.subs(mass,3500))
+
+
 
 # resulting average (variation +-10%)
 # riKwhM = 0.02
@@ -138,10 +146,19 @@ def plotConsumption(p1,p2,leg1,leg2,p3=False,leg3=False, p4=False,leg4=False):
     for i in range(len(arrays)):
         p = arrays[i]
         ax.scatter(p[:,0], p[:,3], s=6, c=cols[i], alpha=al, linewidth = 0)
-
     ax.set_xlabel('One-way Geodisic Distance (km)')
-    ax.set_ylabel('Power Consumption (Wh)')
-    ax.set_title('Hitch-hiking UAV Power Consumption for Return Delivery Journey\n')
+    ax.set_ylabel('Return Energy Consumption (Wh)')
+    ax.set_title('Hitch-hiking UAV Energy Consumption for Return Delivery Journey\n')
+    mean1 = np.mean(arrays[0][:,3][np.where(arrays[0][:,3]>2)])
+    mean2 = np.mean(arrays[1][:,3][np.where(arrays[1][:,3]>2)])
+    mean3 = np.mean(arrays[2][:,3][np.where(arrays[2][:,3]>2)])
+    meanV = 260
+    print(mean1,mean2,mean3)
+    ax.hlines(meanV, 0, 10.25, linewidth= 1.5, color = 'black')
+    ax.hlines(mean1, 0, 10.25, linewidth= 1.5, color = cols[0])
+    ax.hlines(mean2, 0, 10.25, linewidth= 1.5, color = cols[1])
+    ax.hlines(mean3, 0, 10.25, linewidth= 1.5, color = cols[2])
+    #legendNames.append('Mean Van Consumption')
     ax.legend(legendNames)
     ax.grid(which='major', color='black', linestyle='-', alpha=0.2)
     ax.grid(which='minor', color='black', linestyle='-', alpha=0.1)
@@ -230,6 +247,7 @@ def plotEnergyConsBP(p1,p2, p3):
 def plotEnergyConsCh(p1,p2,p3):
     # plots the change in energy consumption from adding 30 and 100W WPT systems
     # averaged across 0.5km intervals, compared to no WPT, bus-riding base case
+    '''
     arrays = [p1,p2,p3]
     dInt = np.linspace(0.25,10.25,41)
     x = np.linspace(0.5,10,40)
@@ -240,14 +258,24 @@ def plotEnergyConsCh(p1,p2,p3):
             meanArr.append(np.mean(arr[:,3][np.where(np.logical_and(arr[:,0]>dInt[j],arr[:,0]<dInt[j+1]))]))
         arrays[i] = meanArr
     p1,p2,p3 = arrays
+    '''
+    p1 = p1[np.argsort(p1[:, 0])]
+    p2 = p2[np.argsort(p2[:, 0])]
+    p3 = p3[np.argsort(p3[:, 0])]
     fig, ax = plt.subplots()
-    red1 = -100*np.subtract(np.array(p3),np.array(p1))/np.array(p3)
-    red2 = -100*np.subtract(np.array(p3),np.array(p2))/np.array(p3)
-    ax.scatter(x, red2, s=10, c=gB)
-    ax.scatter(x, red1, s=10, c=gLB, alpha=0.7)
+    red1 = -100*np.subtract(np.array(p3[:,3]),np.array(p1[:,3]))/np.array(p3[:,3])
+    red2 = -100*np.subtract(np.array(p3[:,3]),np.array(p2[:,3]))/np.array(p3[:,3])
+    ax.scatter(p1[:,0], red2, s=6, c=gG, alpha=0.5)
+    ax.scatter(p1[:,0], red1, s=6, c=gLB, alpha=0.5)
     
     ax.grid(which='major', color='black', linestyle='-', alpha=0.2)
     ax.grid(which='minor', color='black', linestyle='-', alpha=0.1)
+
+    x = p1[:,0].reshape(-1,1)
+    reg = LinearRegression().fit(x, red2)
+    ax.plot(x, reg.predict(x), c=gG, linewidth=2)
+    reg2 = LinearRegression().fit(x, red1)
+    ax.plot(x, reg2.predict(x), c=gLB, linewidth=2)
     ax.legend(['100W WPT','30W WPT'])
     ax.set_xlabel('Geodisic Distance (km)')
     ax.set_ylabel('% Change in Energy Consumption')
@@ -340,16 +368,16 @@ def loadData(id):
     nBus = np.loadtxt(dir+"nBus"+id+'.csv', delimiter=",", dtype=float)
     return lowWPT, highWPT, nWPT, nBus
 
-lowWPT, highWPT, nWPT, nBus = getEnergyData(20, start, [N,S,E,W], 1000, 'low', 'high', 'allNodes')
-saveData(lowWPT, highWPT, nWPT, nBus, 'all_1000')
+lowWPT, highWPT, nWPT, nBus = getEnergyData(1000, start, [N,S,E,W], 1000, 'low', 'high', 'sameDest')
+saveData(lowWPT, highWPT, nWPT, nBus, '1000nl_1000')
 
 #lowWPT, highWPT, nWPT, nBus = loadData('all_1000')
 
 plotEnergyConsCh(lowWPT, highWPT, nWPT)
-plotConsumption(lowWPT, highWPT,'30W WPT','100W WPT',nWPT,'No WPT',nBus, 'Flight Only')
-plotMEGraph(highWPT, lowWPT, nWPT, nBus, flightP)
+#plotConsumption(lowWPT, highWPT,'30W WPT','100W WPT',nWPT,'No WPT',nBus, 'Flight Only')
+#plotMEGraph(highWPT, lowWPT, nWPT, nBus, flightP)
 
-plotTimes(nWPT, nBus)
+#plotTimes(nWPT, nBus)
 '''
 # Code to calculate the average ratio of travelled distance to geodisic distance
 lMeans = np.mean(lowWPT, axis=0)
