@@ -28,7 +28,7 @@ warehouse = ar.warehouse    # warehouse name
 sBus = 15                   # bus speed in km/hr       
 sFly = 36                   # drone speed in km/hr
 
-cost = 1 
+cost = rF.costV1
 #graph colours
 gR = '#E22526'
 gDO = '#D36027'

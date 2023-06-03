@@ -23,13 +23,13 @@ N,E,S,W = ar.bBoxes[0]      # bounding box for delivery locations
 start = ar.startLL          # start location (specified warehouse)
 warehouse = ar.warehouse    # warehouse name
 
-''' # To plot relationshops for V1
+''' # To plot relationships for V1 with costParametersPlot
 busWhkm = 0.72              # bus ride Wh/km
 flWhkm = 24                 # flight Wh/km
 sBus = 15
 sFly = 36
 '''
-''' # To plot relationships for V2
+''' # To plot relationships for V2 with costParametersPlot
 busWhkm = 0.02              # bus ride relative energy
 flWhkm = 1                  # flight relative energy
 sBus = 15
