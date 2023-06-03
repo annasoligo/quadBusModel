@@ -1,6 +1,6 @@
 
 # Bus-Drone Routing
-> An analyis framework for  optimal routing of  for a London delivery drone which hitchikes and wirelessly charges on buses and compares it to the energy use of a drone-only delivery.
+> An analyis framework for optimal routing of a London delivery drone which hitchikes and wirelessly charges on buses, to enable comparison of its energy use with the flight-only alternative.
 
 
 ## Context
